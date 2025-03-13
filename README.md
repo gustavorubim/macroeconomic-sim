@@ -33,6 +33,92 @@ graph TD
     H --> I[Results & Reports]
 ```
 
+## Installation and Setup
+
+### Prerequisites
+
+- **Python**: 3.8 or higher
+- **Operating System**: Windows, macOS, or Linux
+- **RAM**: Minimum 4GB (8GB+ recommended for larger models)
+- **Disk Space**: At least 500MB for installation and example data
+
+### Installation Options
+
+#### Option 1: Installation via pip (Recommended)
+
+```bash
+# Create and activate a virtual environment (recommended)
+python -m venv dsge-env
+# On Windows
+dsge-env\Scripts\activate
+# On macOS/Linux
+source dsge-env/bin/activate
+
+# Install the package
+pip install git+https://github.com/username/macroeconomic-sim.git
+```
+
+#### Option 2: Manual Installation from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/username/macroeconomic-sim.git
+cd macroeconomic-sim
+
+# Create and activate a virtual environment (recommended)
+python -m venv venv
+# On Windows
+venv\Scripts\activate
+# On macOS/Linux
+source venv/bin/activate
+
+# Install dependencies
+pip install -e .
+
+# Install development dependencies (optional)
+pip install -e ".[dev]"
+
+# Install JAX for GPU acceleration (optional)
+pip install -e ".[jax]"
+```
+
+### Environment Configuration
+
+The DSGE model implementation uses two configuration files:
+
+1. **Estimation Configuration**: `config/estimation_config.json`
+2. **Forecast Configuration**: `config/forecast_config.json`
+
+You can customize these files or create your own configuration files to modify model parameters, enable/disable extensions, and configure solution methods.
+
+### Dependencies Management
+
+The package dependencies are managed through `setup.py`. Core dependencies include:
+- `numpy` and `scipy` for numerical computing
+- `pandas` and `pandas_datareader` for data management
+- `matplotlib` and `seaborn` for visualization
+- `pymc` for Bayesian estimation
+- `sympy` for symbolic manipulation
+
+Optional dependencies:
+- `numba` for JIT compilation of performance-critical routines
+- `jax` and `jaxlib` for automatic differentiation and GPU acceleration
+
+### Verification
+
+To verify that the installation is working correctly:
+
+```bash
+# Run a simple example
+python examples/simple_example.py
+
+# Verify the output
+ls results/example/
+# Should show impulse_responses.png
+```
+
+You should see a new directory `results/example/` with impulse response visualizations.
+
 ## Project Structure
 
 ```
@@ -79,6 +165,79 @@ macroeconomic-sim/
 ├── run_forecast.py          # Main forecasting script
 └── README.md                # Project documentation
 ```
+
+## Quick Start Guide
+
+### Basic Model Simulation
+
+```python
+from config.config_manager import ConfigManager
+from dsge.core import SmetsWoutersModel
+from dsge.solution import PerturbationSolver
+
+# Create configuration
+config = ConfigManager()
+
+# Create model
+model = SmetsWoutersModel(config)
+
+# Solve model using first-order perturbation
+solver = PerturbationSolver(model, order=1)
+solution = solver.solve()
+
+# Simulate model for 40 periods
+states, controls = solver.simulate(periods=40)
+
+print("Simulation complete!")
+```
+
+### Generating Impulse Responses
+
+```python
+from dsge.analysis import ImpulseResponseFunctions
+import matplotlib.pyplot as plt
+
+# Create IRF analyzer
+irf = ImpulseResponseFunctions(model, config)
+
+# Compute IRFs for technology shock
+irfs = irf.compute_irfs(
+    shock_names=["technology"],
+    periods=40,
+    shock_size=1.0
+)
+
+# Plot output response to technology shock
+plt.figure(figsize=(10, 6))
+plt.plot(irfs["technology"]["output"])
+plt.title("Output Response to Technology Shock")
+plt.xlabel("Periods")
+plt.ylabel("Deviation from Steady State")
+plt.grid(True)
+plt.show()
+```
+
+### Running Model Estimation
+
+```bash
+# Run estimation with default configuration
+python run_estimation.py
+
+# Run estimation with custom configuration
+python run_estimation.py --config path/to/custom_config.json
+```
+
+### Running Forecasting
+
+```bash
+# Run forecasting with default configuration
+python run_forecast.py
+
+# Run forecasting with custom configuration
+python run_forecast.py --config path/to/custom_config.json
+```
+
+For more detailed examples, please see the `examples/` directory and the comprehensive usage guide in the `docs/` directory.
 
 ## Core Components
 
@@ -316,7 +475,7 @@ sequenceDiagram
 
 ## Best Practices
 
-The implementation will follow Python best practices:
+The implementation follows Python best practices:
 - Type hints throughout the codebase
 - Comprehensive docstrings following NumPy/Google style
 - Exception handling with custom exceptions
@@ -324,6 +483,36 @@ The implementation will follow Python best practices:
 - Integration tests for workflows
 - Documentation generation from docstrings
 
-## Getting Started
+## Support and Contribution
 
-Instructions on setting up and running the model will be provided as the implementation progresses.
+For bug reports, feature requests, and contributions, please open an issue or pull request on the GitHub repository.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Citation
+
+If you use this implementation in your research, please cite:
+
+```
+@software{smets_wouters_dsge,
+  author = {Research Team},
+  title = {Smets and Wouters DSGE Model Implementation},
+  year = {2025},
+  url = {https://github.com/username/macroeconomic-sim}
+}
+```
+
+And the original Smets and Wouters (2007) paper:
+
+```
+@article{smets2007shocks,
+  title={Shocks and frictions in US business cycles: A Bayesian DSGE approach},
+  author={Smets, Frank and Wouters, Rafael},
+  journal={American economic review},
+  volume={97},
+  number={3},
+  pages={586--606},
+  year={2007}
+}
