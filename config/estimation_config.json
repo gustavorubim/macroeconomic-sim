@@ -1,0 +1,145 @@
+{
+  "base_model": {
+    "beta": 0.99,
+    "sigma_c": 1.5,
+    "h": 0.7,
+    "sigma_l": 2.0,
+    "alpha": 0.3,
+    "delta": 0.025,
+    "epsilon_p": 10.0,
+    "xi_p": 0.75,
+    "iota_p": 0.5,
+    "epsilon_w": 10.0,
+    "xi_w": 0.75,
+    "iota_w": 0.5,
+    "rho_r": 0.8,
+    "phi_pi": 1.5,
+    "phi_y": 0.125,
+    "phi_dy": 0.125,
+    "pi_bar": 1.005,
+    "r_bar": 1.01,
+    "g_y": 1.005
+  },
+  "financial_extension": {
+    "enabled": false,
+    "mu": 0.12,
+    "sigma_omega": 0.3,
+    "gamma": 0.975,
+    "lambda_b": 0.05
+  },
+  "open_economy_extension": {
+    "enabled": false,
+    "alpha_h": 0.7,
+    "eta": 1.5,
+    "phi_b": 0.01
+  },
+  "fiscal_extension": {
+    "enabled": false,
+    "g_y_ratio": 0.2,
+    "b_y_ratio": 0.6,
+    "tau_c": 0.2,
+    "tau_k": 0.35,
+    "tau_l": 0.28,
+    "rho_g": 0.9,
+    "phi_b": 0.1
+  },
+  "shocks": {
+    "technology": {
+      "rho": 0.95,
+      "sigma": 0.01
+    },
+    "preference": {
+      "rho": 0.9,
+      "sigma": 0.01
+    },
+    "investment": {
+      "rho": 0.9,
+      "sigma": 0.01
+    },
+    "government": {
+      "rho": 0.9,
+      "sigma": 0.01
+    },
+    "monetary": {
+      "rho": 0.5,
+      "sigma": 0.003
+    },
+    "price_markup": {
+      "rho": 0.9,
+      "sigma": 0.01
+    },
+    "wage_markup": {
+      "rho": 0.9,
+      "sigma": 0.01
+    }
+  },
+  "solution": {
+    "method": "perturbation",
+    "perturbation_order": 2,
+    "projection_method": "chebyshev",
+    "projection_nodes": 5
+  },
+  "estimation": {
+    "method": "bayesian",
+    "mcmc_algorithm": "metropolis_hastings",
+    "num_chains": 4,
+    "num_draws": 10000,
+    "burn_in": 5000,
+    "tune": 1000,
+    "target_acceptance": 0.234
+  },
+  "data": {
+    "start_date": "1984-01-01",
+    "end_date": "2019-12-31",
+    "frequency": "quarterly",
+    "series": {
+      "gdp": {
+        "source": "FRED",
+        "series_id": "GDPC1",
+        "transformation": "log_diff"
+      },
+      "consumption": {
+        "source": "FRED",
+        "series_id": "PCECC96",
+        "transformation": "log_diff"
+      },
+      "investment": {
+        "source": "FRED",
+        "series_id": "GPDIC1",
+        "transformation": "log_diff"
+      },
+      "hours": {
+        "source": "FRED",
+        "series_id": "HOANBS",
+        "transformation": "log_diff"
+      },
+      "wages": {
+        "source": "FRED",
+        "series_id": "COMPRNFB",
+        "transformation": "log_diff"
+      },
+      "inflation": {
+        "source": "FRED",
+        "series_id": "GDPDEF",
+        "transformation": "log_diff"
+      },
+      "interest_rate": {
+        "source": "FRED",
+        "series_id": "FEDFUNDS",
+        "transformation": "level"
+      }
+    },
+    "detrending": {
+      "method": "hp_filter",
+      "lambda": 1600
+    }
+  },
+  "visualization": {
+    "style": "seaborn-whitegrid",
+    "context": "paper",
+    "dpi": 300,
+    "figsize": [10, 6],
+    "save_format": "pdf",
+    "save_path": "figures/"
+  }
+}
