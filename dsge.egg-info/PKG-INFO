@@ -1,0 +1,29 @@
+Metadata-Version: 2.2
+Name: dsge
+Version: 0.1.0
+Summary: Smets and Wouters DSGE Model Implementation with Extensions
+Author: Research Team
+Requires-Python: >=3.8
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: pandas
+Requires-Dist: pandas_datareader
+Requires-Dist: matplotlib
+Requires-Dist: seaborn
+Requires-Dist: pymc
+Requires-Dist: sympy
+Requires-Dist: numba
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: sphinx; extra == "dev"
+Provides-Extra: jax
+Requires-Dist: jax; extra == "jax"
+Requires-Dist: jaxlib; extra == "jax"
+Dynamic: author
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
