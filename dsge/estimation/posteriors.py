@@ -162,10 +162,12 @@ class PosteriorAnalysis:
         # Create figure and axes
         fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
         
-        # Flatten axes if needed
+        # Ensure axes is always a properly indexable array
         if n_rows == 1 and n_cols == 1:
-            axes = np.array([axes])
+            # For a single subplot, make it a 1D array with one element
+            axes = np.array([axes]).flatten()
         elif n_rows == 1 or n_cols == 1:
+            # For a single row or column, flatten to 1D
             axes = axes.flatten()
         
         # Plot each parameter
@@ -201,7 +203,9 @@ class PosteriorAnalysis:
         
         # Add legend to the first subplot
         if n_params > 0:
-            axes[0].legend()
+            # Get the first subplot - works whether axes is 1D or 2D
+            first_ax = axes.flat[0] if hasattr(axes, 'flat') else axes[0]
+            first_ax.legend()
         
         # Adjust layout
         plt.tight_layout()
@@ -246,10 +250,12 @@ class PosteriorAnalysis:
         # Create figure and axes
         fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
         
-        # Flatten axes if needed
+        # Ensure axes is always a properly indexable array
         if n_rows == 1 and n_cols == 1:
-            axes = np.array([axes])
+            # For a single subplot, make it a 1D array with one element
+            axes = np.array([axes]).flatten()
         elif n_rows == 1 or n_cols == 1:
+            # For a single row or column, flatten to 1D
             axes = axes.flatten()
         
         # Plot each parameter
@@ -320,7 +326,9 @@ class PosteriorAnalysis:
         
         # Add legend to the first subplot
         if n_params > 0:
-            axes[0].legend()
+            # Get the first subplot - works whether axes is 1D or 2D
+            first_ax = axes.flat[0] if hasattr(axes, 'flat') else axes[0]
+            first_ax.legend()
         
         # Adjust layout
         plt.tight_layout()
@@ -590,10 +598,12 @@ class PosteriorAnalysis:
         # Create figure and axes
         fig, axes = plt.subplots(n_rows, n_cols, figsize=figsize)
         
-        # Flatten axes if needed
+        # Ensure axes is always a properly indexable array
         if n_rows == 1 and n_cols == 1:
-            axes = np.array([axes])
+            # For a single subplot, make it a 1D array with one element
+            axes = np.array([axes]).flatten()
         elif n_rows == 1 or n_cols == 1:
+            # For a single row or column, flatten to 1D
             axes = axes.flatten()
         
         # Plot each parameter

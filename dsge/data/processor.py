@@ -363,10 +363,15 @@ class DataProcessor:
         
         # Detrend if needed
         if detrending_method != "none":
+            # Create a copy of config and remove the method to avoid duplicate parameter
+            detrending_params = detrending_config.copy()
+            if "method" in detrending_params:
+                detrending_params.pop("method")
+            
             detrended, _ = self.detrend_series(
-                transformed, 
-                method=detrending_method, 
-                **detrending_config
+                transformed,
+                method=detrending_method,
+                **detrending_params
             )
             return detrended
         
