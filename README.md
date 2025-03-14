@@ -158,7 +158,16 @@ macroeconomic-sim/
 │       ├── plots.py         # Standard plots
 │       ├── publication.py   # Publication-quality figures
 │       └── interactive.py   # Interactive visualizations
-├── tests/                   # Unit tests
+├── tests/                   # Testing framework
+│   ├── unit/                # Unit tests
+│   ├── integration/         # Integration tests
+│   ├── functional/          # Functional tests
+│   ├── performance/         # Performance tests
+│   ├── debug/               # Debugging scripts
+│   ├── utils/               # Test utilities
+│   ├── conftest.py          # Test fixtures
+│   ├── run_tests.py         # Master test script
+│   └── README.md            # Testing documentation
 ├── examples/                # Example scripts
 ├── setup.py                 # Package installation
 ├── run_estimation.py        # Main estimation script
@@ -235,6 +244,22 @@ python run_forecast.py
 
 # Run forecasting with custom configuration
 python run_forecast.py --config path/to/custom_config.json
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+python tests/run_tests.py --all
+
+# Run specific test types
+python tests/run_tests.py --unit
+python tests/run_tests.py --integration
+python tests/run_tests.py --functional
+python tests/run_tests.py --performance
+
+# Run tests with coverage
+python tests/run_tests.py --all --coverage
 ```
 
 For more detailed examples, please see the `examples/` directory and the comprehensive usage guide in the `docs/` directory.
@@ -374,6 +399,49 @@ Each extension will be implemented as a modular component that can be toggled on
 - Customizable styles
 - Automated figure generation
 
+## Testing Framework
+
+The project includes a comprehensive testing framework to ensure code quality and correctness:
+
+### Test Types
+
+- **Unit Tests**: Test individual components in isolation
+- **Integration Tests**: Test interactions between components
+- **Functional Tests**: Test end-to-end workflows
+- **Performance Tests**: Measure execution time and resource usage
+
+### Test Features
+
+- **Automated Test Discovery**: Tests are automatically discovered and executed
+- **Code Coverage**: Measure code coverage to identify untested code
+- **Test Reports**: Generate detailed reports of test results
+- **Mock Data Generation**: Generate synthetic data for testing
+- **Fixtures**: Common test fixtures for reuse across tests
+- **Parameterized Tests**: Test multiple inputs with a single test function
+
+### Running Tests
+
+The master test script (`tests/run_tests.py`) provides a unified interface for running tests:
+
+```bash
+# Run all tests
+python tests/run_tests.py --all
+
+# Run specific test types
+python tests/run_tests.py --unit
+python tests/run_tests.py --integration
+python tests/run_tests.py --functional
+python tests/run_tests.py --performance
+
+# Run tests with coverage
+python tests/run_tests.py --all --coverage
+
+# Generate a test report
+python tests/run_tests.py --all --report test_report.json
+```
+
+For more information about the testing framework, see the [tests/README.md](tests/README.md) file.
+
 ## Implementation Strategy
 
 ### Phase 1: Core Infrastructure
@@ -417,6 +485,11 @@ Each extension will be implemented as a modular component that can be toggled on
 ### Optional Performance Enhancements
 - **numba**: JIT compilation for performance-critical routines
 - **jax**: Automatic differentiation and GPU acceleration (advanced users)
+
+### Testing Dependencies
+- **pytest**: Test framework
+- **coverage**: Code coverage measurement
+- **pytest-benchmark**: Performance testing
 
 ## Workflow Diagrams
 
@@ -471,6 +544,34 @@ sequenceDiagram
     Forecast->>Viz: Forecast results
     Viz->>Viz: Create fan charts & distributions
     Viz->>User: Forecast visualizations
+```
+
+### Testing Workflow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Runner as Test Runner
+    participant Unit as Unit Tests
+    participant Integration as Integration Tests
+    participant Functional as Functional Tests
+    participant Performance as Performance Tests
+    participant Coverage as Coverage Tool
+    participant Report as Test Report
+    
+    User->>Runner: Run tests
+    Runner->>Unit: Execute unit tests
+    Unit->>Runner: Unit test results
+    Runner->>Integration: Execute integration tests
+    Integration->>Runner: Integration test results
+    Runner->>Functional: Execute functional tests
+    Functional->>Runner: Functional test results
+    Runner->>Performance: Execute performance tests
+    Performance->>Runner: Performance test results
+    Runner->>Coverage: Measure code coverage
+    Coverage->>Runner: Coverage results
+    Runner->>Report: Generate test report
+    Report->>User: Test summary and details
 ```
 
 ## Best Practices
