@@ -1,9 +1,21 @@
 {
-  "timestamp": "2025-03-13T20:41:33.032053",
+  "timestamp": "2025-03-13T21:13:08.938366",
   "results": {
     "unit": {
       "result": 4,
-      "execution_time": 2.363720417022705
+      "execution_time": 2.3637404441833496
+    },
+    "integration": {
+      "result": 4,
+      "execution_time": 0.15611934661865234
+    },
+    "functional": {
+      "result": 4,
+      "execution_time": 0.0744173526763916
+    },
+    "performance": {
+      "result": 4,
+      "execution_time": 0.0735635757446289
     }
   }
 }
