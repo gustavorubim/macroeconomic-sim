@@ -30,9 +30,23 @@ class TestSolutionEstimation:
         # Solve model
         solution = solver.solve()
         
-        # Check that solution exists
+        # Check solution exists and has correct format
         assert solution is not None
-        assert 'state_transition' in solution
+        assert isinstance(solution, dict)
+        
+        # Check required keys
+        required_keys = ['state_transition', 'policy_function', 'steady_state']
+        for key in required_keys:
+            assert key in solution, f"Missing required key: {key}"
+            
+        # Check matrices have correct type and shape
+        F = solution['state_transition']
+        P = solution['policy_function']
+        ss = solution['steady_state']
+        
+        assert isinstance(F, np.ndarray), "State transition matrix must be numpy array"
+        assert isinstance(P, np.ndarray), "Policy function matrix must be numpy array"
+        assert isinstance(ss, dict), "Steady state must be dictionary"
         assert 'observation_equation' in solution
         
         # Check that matrices have correct dimensions
@@ -43,10 +57,10 @@ class TestSolutionEstimation:
         assert solution['state_transition'].shape == (n_states, n_states + n_shocks)
         assert solution['observation_equation'].shape == (n_controls, n_states)
 
-    def test_estimator_initialization_with_model_and_data(self, model, sample_data):
+    def test_estimator_initialization_with_model_and_data(self, model, sample_data, config):
         """Test that the estimator initializes correctly with a model and data."""
         # Initialize estimator
-        estimator = BayesianEstimator(model, sample_data)
+        estimator = BayesianEstimator(model, sample_data, config)
         
         # Check that estimator exists
         assert estimator is not None

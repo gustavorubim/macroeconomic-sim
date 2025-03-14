@@ -17,7 +17,8 @@ from pathlib import Path
 from datetime import datetime
 
 # Add the project root to Python path to import modules
-sys.path.insert(0, os.path.abspath('.'))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
 
 def parse_args():
@@ -80,11 +81,11 @@ def run_tests(test_type=None, verbose=False, coverage_obj=None):
     """Run tests of the specified type."""
     start_time = time.time()
     
-    # Determine which tests to run
+    # Determine which tests to run using the project root
     if test_type is None:
-        test_path = 'tests'
+        test_path = os.path.join(BASE_DIR, 'tests')
     else:
-        test_path = f'tests/{test_type}'
+        test_path = os.path.join(BASE_DIR, 'tests', test_type)
     
     # Set up pytest arguments
     pytest_args = [test_path, '-v'] if verbose else [test_path]

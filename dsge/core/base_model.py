@@ -10,7 +10,7 @@ References:
 """
 
 import numpy as np
-from typing import Dict, List, Tuple, Any, Optional, Union
+from typing import Dict, List, Tuple, Any, Optional, Union, Callable
 from dataclasses import dataclass
 
 from config.config_manager import ConfigManager
@@ -84,6 +84,12 @@ class ModelVariables:
             price_markup_shock=np.zeros(periods),
             wage_markup_shock=np.zeros(periods),
         )
+@dataclass
+class ModelCategories:
+    state: list = None
+    control: list = None
+    shock: list = None
+    equations: list = None
 
 
 class SmetsWoutersModel:
@@ -116,11 +122,43 @@ class SmetsWoutersModel:
         # Extract model parameters from configuration
         self.params = self._extract_parameters()
         
-        # Initialize model variables
-        self.variables = None
-        
-        # Initialize steady state values
+        # Initialize model variables and steady state values
         self.steady_state = None
+        self.variables = ModelCategories(
+            state=['capital', 'technology_shock', 'preference_shock', 'investment_shock',
+                  'government_shock', 'monetary_shock', 'price_markup_shock', 'wage_markup_shock'],
+            control=['output', 'consumption', 'investment', 'labor', 'real_wage',
+                    'rental_rate', 'inflation', 'nominal_interest'],
+            shock=['technology', 'preference', 'investment', 'government',
+                  'monetary', 'price_markup', 'wage_markup']
+        )
+        
+        # Initialize model equations
+        self.equations = self.get_model_equations()
+        
+        # Add extension variables if enabled
+        if self.config.get('model.extensions.financial', False):
+            self.variables.control.extend(['spread', 'net_worth', 'leverage'])
+            
+            # Update steady state calculation for financial variables
+            if self.steady_state is not None:
+                self.steady_state.update({
+                    'spread': 0.0,  # In steady state, risk spreads are typically zero
+                    'net_worth': 1.0,  # Normalized net worth
+                    'leverage': 1.0,  # Normalized leverage
+                })
+                
+        if self.config.get('model.extensions.open_economy', False):
+            self.variables.state.extend(['exports', 'imports', 'exchange_rate', 'foreign_output'])
+            
+            # Update steady state calculation for open economy variables
+            if self.steady_state is not None:
+                self.steady_state.update({
+                    'exports': 0.2,  # 20% of GDP in steady state
+                    'imports': 0.2,  # Balanced trade in steady state
+                    'exchange_rate': 1.0,  # Normalized exchange rate
+                    'foreign_output': 1.0,  # Normalized foreign output
+                })
     
     def _extract_parameters(self) -> Dict[str, float]:
         """
@@ -182,6 +220,26 @@ class SmetsWoutersModel:
             "real_interest": r_ss / pi_bar,
         }
         
+        # Add financial extension steady states if enabled
+        if self.config.get('model.extensions.financial', False):
+            self.steady_state.update({
+                'spread': 0.0,  # Zero spread in steady state
+                'net_worth': y_ss,  # Net worth normalized to output
+                'leverage': 1.0,  # Unit leverage in steady state
+            })
+        
+        # Add open economy extension steady states if enabled
+        if self.config.get('model.extensions.open_economy', False):
+            exports_ss = 0.2 * y_ss  # 20% of GDP
+            imports_ss = exports_ss  # Balanced trade
+            
+            self.steady_state.update({
+                'exports': exports_ss,
+                'imports': imports_ss,
+                'exchange_rate': 1.0,  # Normalized exchange rate
+                'foreign_output': y_ss,  # Foreign output normalized to domestic
+            })
+        
         return self.steady_state
     
     def initialize_variables(self, periods: int) -> ModelVariables:
@@ -219,6 +277,27 @@ class SmetsWoutersModel:
         
         return self.variables
     
+    def update_parameters(self, new_params: Dict[str, float]) -> None:
+        """
+        Update model parameters.
+        
+        Args:
+            new_params: Dictionary of parameter names and values to update
+        """
+        # Validate parameters
+        for name, value in new_params.items():
+            if name not in self.params:
+                raise ValueError(f"Unknown parameter: {name}")
+            if not isinstance(value, (int, float)):
+                raise TypeError(f"Parameter {name} must be numeric, got {type(value)}")
+                
+        # Update parameters
+        self.params.update(new_params)
+        
+        # Reset cached computations
+        if hasattr(self, 'steady_state'):
+            delattr(self, 'steady_state')
+            
     def generate_shock_processes(self, periods: int, seed: Optional[int] = None) -> None:
         """
         Generate exogenous shock processes.
@@ -254,51 +333,87 @@ class SmetsWoutersModel:
             # Store shock process
             setattr(self.variables, f"{shock_name}_shock", shock)
     
-    def get_model_equations(self) -> List[str]:
+    def get_model_equations(self) -> List[Callable]:
         """
-        Get the model equations as a list of strings.
+        Get the model equations as a list of callable functions.
         
         Returns:
-            List[str]: List of model equations as strings.
+            List[Callable]: List of equation functions.
         """
+        beta = self.params["beta"]
+        delta = self.params["delta"]
+        alpha = self.params["alpha"]
+        epsilon_p = self.params.get("epsilon_p", 6.0)
+        epsilon_w = self.params.get("epsilon_w", 6.0)
+        xi_p = self.params["xi_p"]
+        xi_w = self.params["xi_w"]
+        iota_p = self.params["iota_p"]
+        iota_w = self.params["iota_w"]
+        rho_r = self.params["rho_r"]
+        phi_pi = self.params["phi_pi"]
+        phi_y = self.params["phi_y"]
+        phi_dy = self.params["phi_dy"]
+        pi_bar = self.params["pi_bar"]
+        r_bar = self.params["r_bar"]
+        
+        # Define equation functions
+        def euler_equation(vars_t, vars_tp1):
+            """Consumption Euler equation"""
+            return (vars_t['lambda_t'] - beta * (1 + vars_t['r_t']) *
+                   vars_tp1['lambda_t'] / vars_tp1['pi_t'])
+        
+        def capital_accumulation(vars_t, vars_tm1):
+            """Capital accumulation equation"""
+            return vars_t['k_t'] - (1 - delta) * vars_tm1['k_t'] - vars_t['i_t']
+        
+        def production_function(vars_t, vars_tm1):
+            """Production function"""
+            return (vars_t['y_t'] - vars_t['a_t'] *
+                   vars_tm1['k_t']**alpha * vars_t['l_t']**(1-alpha))
+        
+        def rental_rate(vars_t, vars_tm1):
+            """Rental rate of capital"""
+            return (vars_t['r_k_t'] - alpha * vars_t['mc_t'] *
+                   vars_t['y_t'] / vars_tm1['k_t'])
+        
+        def wage_equation(vars_t):
+            """Real wage equation"""
+            return (vars_t['w_t'] - (1 - alpha) * vars_t['mc_t'] *
+                   vars_t['y_t'] / vars_t['l_t'])
+        
+        def price_phillips(vars_t, vars_tm1):
+            """Price Phillips curve"""
+            return (vars_t['pi_t'] - (1 - xi_p) * vars_t['pi_star_t'] -
+                   xi_p * vars_tm1['pi_t']**iota_p * pi_bar**(1-iota_p))
+        
+        def wage_phillips(vars_t, vars_tm1):
+            """Wage Phillips curve"""
+            return (vars_t['w_t'] - (1 - xi_w) * vars_t['w_star_t'] -
+                   xi_w * vars_tm1['w_t'] * vars_tm1['pi_t']**iota_w *
+                   pi_bar**(1-iota_w) / vars_t['pi_t'])
+        
+        def monetary_policy(vars_t, vars_tm1):
+            """Monetary policy rule"""
+            return (vars_t['r_t'] - rho_r * vars_tm1['r_t'] -
+                   (1 - rho_r) * (r_bar + phi_pi * (vars_t['pi_t'] - pi_bar) +
+                   phi_y * (vars_t['y_t'] - self.steady_state['output']) +
+                   phi_dy * (vars_t['y_t'] - vars_tm1['y_t'])) -
+                   vars_t['r_shock_t'])
+        
+        def market_clearing(vars_t):
+            """Market clearing condition"""
+            return vars_t['y_t'] - vars_t['c_t'] - vars_t['i_t'] - vars_t['g_t']
+        
         equations = [
-            # Household utility maximization
-            "u'(c_t) = beta * E_t[u'(c_{t+1}) * (1 + r_t) / pi_{t+1}]",
-            "u'(c_t) = lambda_t",
-            "v'(l_t) = lambda_t * w_t",
-            
-            # Capital accumulation
-            "k_t = (1 - delta) * k_{t-1} + i_t",
-            
-            # Production function
-            "y_t = a_t * k_{t-1}^alpha * l_t^(1-alpha)",
-            
-            # Factor demands
-            "r_k_t = alpha * mc_t * y_t / k_{t-1}",
-            "w_t = (1 - alpha) * mc_t * y_t / l_t",
-            
-            # Price setting
-            "pi_t = (1 - xi_p) * pi_t^* + xi_p * pi_{t-1}^{iota_p} * pi_bar^{1-iota_p}",
-            "pi_t^* = (epsilon_p / (epsilon_p - 1)) * mc_t",
-            
-            # Wage setting
-            "w_t = (1 - xi_w) * w_t^* + xi_w * w_{t-1} * pi_{t-1}^{iota_w} * pi_bar^{1-iota_w} / pi_t",
-            "w_t^* = (epsilon_w / (epsilon_w - 1)) * mrs_t",
-            "mrs_t = v'(l_t) / u'(c_t)",
-            
-            # Monetary policy rule
-            "r_t = rho_r * r_{t-1} + (1 - rho_r) * (r_bar + phi_pi * (pi_t - pi_bar) + phi_y * (y_t - y_bar) + phi_dy * (y_t - y_{t-1})) + e_r_t",
-            
-            # Market clearing
-            "y_t = c_t + i_t + g_t",
-            
-            # Shock processes
-            "log(a_t) = rho_a * log(a_{t-1}) + e_a_t",
-            "log(g_t) = rho_g * log(g_{t-1}) + e_g_t",
-            "log(i_t) = rho_i * log(i_{t-1}) + e_i_t",
-            "log(lambda_t) = rho_b * log(lambda_{t-1}) + e_b_t",
-            "log(mu_p_t) = rho_p * log(mu_p_{t-1}) + e_p_t",
-            "log(mu_w_t) = rho_w * log(mu_w_{t-1}) + e_w_t",
+            euler_equation,
+            capital_accumulation,
+            production_function,
+            rental_rate,
+            wage_equation,
+            price_phillips,
+            wage_phillips,
+            monetary_policy,
+            market_clearing
         ]
         
         return equations

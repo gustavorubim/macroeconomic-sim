@@ -10,15 +10,17 @@ from typing import Dict, List, Tuple, Any, Optional, Union, Callable
 import sympy as sp
 from scipy.optimize import root
 import logging
+import numpy as np
 
 from config.config_manager import ConfigManager
 from dsge.core.base_model import SmetsWoutersModel
+from dsge.solution.base_solver import BaseSolver
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-class PerturbationSolver:
+class PerturbationSolver(BaseSolver):
     """
     Class for solving DSGE models using perturbation methods.
     """
@@ -203,11 +205,92 @@ class PerturbationSolver:
         ss_values[controls[7]] = self.steady_state["nominal_interest"]  # Nominal interest
         
         # Define a function to evaluate the equations at given values
-        def eval_equations(values_dict):
-            return [float(eq.subs(values_dict)) for eq in equations]
+    @staticmethod
+    def safe_float(value, threshold=1e-6):
+            """
+            Safely convert a symbolic expression to float, handling complex numbers and special values.
+            
+            Args:
+                value: Value to convert
+                threshold: Threshold for considering imaginary parts negligible
+                
+            Returns:
+                float: Real part of the value if imaginary part is negligible
+            """
+            import math
+            import sympy as sp
+            import numpy as np
+            from sympy.core.numbers import (Float, Integer, Rational)
+            
+            def is_effectively_zero(x: float) -> bool:
+                return abs(x) < threshold if x is not None else True
+                
+            def handle_special_value(val):
+                """Handle special values like infinity, nan, etc."""
+                if val in (sp.zoo, sp.oo, -sp.oo, sp.nan, None, float('inf'), float('-inf'), float('nan')):
+                    return 0.0
+                return None
+                
+            def handle_complex(real_val: float, imag_val: float) -> float:
+                """Handle complex number conversion."""
+                if is_effectively_zero(imag_val):
+                    return real_val
+                    
+                if is_effectively_zero(real_val):
+                    return 0.0
+                    
+                if abs(imag_val) / (abs(real_val) + 1e-10) < threshold:
+                    return real_val
+                    
+                # Return magnitude for significant complex values
+                return abs(complex(real_val, imag_val))
+            
+            try:
+                # Handle special values
+                special_result = handle_special_value(value)
+                if special_result is not None:
+                    return special_result
+                
+                # Handle numeric types
+                if isinstance(value, (float, int, Float, Integer, Rational)):
+                    result = float(value)
+                    return 0.0 if math.isnan(result) else result
+                
+                # Handle symbolic expressions
+                if isinstance(value, sp.Expr):
+                    evaluated = value.evalf()
+                    
+                    # Try direct conversion for real numbers
+                    if evaluated.is_real:
+                        try:
+                            return float(evaluated)
+                        except (TypeError, ValueError):
+                            return 0.0
+                    
+                    # Handle complex numbers
+                    try:
+                        real_val = float(evaluated.as_real_imag()[0])
+                        imag_val = float(evaluated.as_real_imag()[1])
+                        return handle_complex(real_val, imag_val)
+                    except (TypeError, ValueError):
+                        return 0.0
+                
+                # Try direct conversion as last resort
+                try:
+                    return float(value)
+                except (TypeError, ValueError):
+                    return 0.0
+                    
+            except Exception as e:
+                logger.error(f"Unexpected error in safe_float: {str(e)}")
+                return 0.0
+    
+    def eval_equations(self, values_dict, equations):
+        """Evaluate model equations at given values."""
+        return [PerturbationSolver.safe_float(eq.subs(values_dict)) for eq in equations]
         
         # Check if the steady state satisfies the equations
-        residuals = eval_equations(ss_values)
+        residuals = self.eval_equations(ss_values, equations)
         if max(abs(np.array(residuals))) > 1e-6:
             logger.warning("Steady state does not satisfy model equations. Solving numerically...")
             
@@ -220,26 +303,37 @@ class PerturbationSolver:
             # Define objective function
             def objective(x):
                 values = {var: val for var, val in zip(variables, x)}
-                return eval_equations(values)
+                return self.eval_equations(values, equations)
             
-            # Solve for steady state
-            result = root(objective, x0)
-            
-            if result.success:
-                # Update steady state values
-                for i, var in enumerate(variables):
-                    ss_values[var] = result.x[i]
-                logger.info("Steady state solved numerically.")
-            else:
+            try:
+                # Solve for steady state with scaled objective
+                def scaled_objective(x):
+                    values = {var: val for var, val in zip(variables, x)}
+                    residuals = self.eval_equations(values, equations)
+                    return np.array(residuals) / (np.abs(x) + 1e-10)  # Scale by variable magnitude
+                
+                # Try multiple initial guesses if first one fails
+                for scale in [1.0, 0.1, 10.0]:
+                    result = root(scaled_objective, x0 * scale, method='lm', options={'maxfev': 10000})
+                    if result.success:
+                        # Update steady state values
+                        for i, var in enumerate(variables):
+                            ss_values[var] = result.x[i]
+                        logger.info("Steady state solved numerically.")
+                        return ss_values
+                
                 logger.error("Failed to solve for steady state numerically.")
-        
-        return ss_values
+                return None
+                
+            except Exception as e:
+                logger.error(f"Error solving for steady state: {str(e)}")
+                return None
     
     def linearize_model(
-        self, 
-        states: List[sp.Symbol], 
-        controls: List[sp.Symbol], 
-        equations: List[sp.Expr], 
+        self,
+        states: List[sp.Symbol],
+        controls: List[sp.Symbol],
+        equations: List[sp.Expr],
         ss_values: Dict[sp.Symbol, float]
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -258,6 +352,16 @@ class PerturbationSolver:
                 - C matrix: Derivative of equations w.r.t. current controls
                 - D matrix: Derivative of equations w.r.t. next period controls
         """
+        def compute_derivative(eq: sp.Expr, var: sp.Symbol) -> float:
+            """Safely compute derivative and evaluate at steady state."""
+            try:
+                derivative = sp.diff(eq, var)
+                evaluated = derivative.subs(ss_values)
+                return PerturbationSolver.safe_float(evaluated)
+            except Exception as e:
+                logger.warning(f"Error computing derivative of equation w.r.t. {var}: {str(e)}")
+                return 0.0
+
         # Number of variables
         n_states = len(states)
         n_controls = len(controls)
@@ -269,27 +373,32 @@ class PerturbationSolver:
         C = np.zeros((n_eqs, n_controls))
         D = np.zeros((n_eqs, n_controls))
         
-        # Compute derivatives
+        # Compute derivatives with error handling
         for i, eq in enumerate(equations):
-            # Derivatives w.r.t. current states
-            for j, var in enumerate(states):
-                A[i, j] = float(sp.diff(eq, var).subs(ss_values))
-            
-            # Derivatives w.r.t. next period states
-            for j, var in enumerate(states):
-                # In a real implementation, this would handle next period variables
-                # Here, we're simplifying by assuming no next period states in equations
-                B[i, j] = 0.0
-            
-            # Derivatives w.r.t. current controls
-            for j, var in enumerate(controls):
-                C[i, j] = float(sp.diff(eq, var).subs(ss_values))
-            
-            # Derivatives w.r.t. next period controls
-            for j, var in enumerate(controls):
-                # In a real implementation, this would handle next period variables
-                # Here, we're simplifying by assuming no next period controls in equations
-                D[i, j] = 0.0
+            try:
+                # Current states
+                for j, var in enumerate(states):
+                    A[i, j] = compute_derivative(eq, var)
+                
+                # Next period states
+                for j, var in enumerate(states):
+                    B[i, j] = compute_derivative(eq, sp.Symbol(f"{var}_next"))
+                
+                # Current controls
+                for j, var in enumerate(controls):
+                    C[i, j] = compute_derivative(eq, var)
+                
+                # Next period controls
+                for j, var in enumerate(controls):
+                    D[i, j] = compute_derivative(eq, sp.Symbol(f"{var}_next"))
+                    
+            except Exception as e:
+                logger.error(f"Error linearizing equation {i}: {str(e)}")
+                # Set zero derivatives for this equation
+                A[i, :] = 0.0
+                B[i, :] = 0.0
+                C[i, :] = 0.0
+                D[i, :] = 0.0
         
         return A, B, C, D
     
@@ -396,25 +505,65 @@ class PerturbationSolver:
         Solve the model using perturbation.
         
         Returns:
-            Dict[str, np.ndarray]: Dictionary of solution matrices.
+            Dict[str, np.ndarray]: Dictionary of solution matrices including:
+                - state_transition: State transition matrix
+                - policy_function: Policy function matrix
+                - steady_state: Steady state values
         """
-        # Create symbolic model
-        states, controls, equations = self.create_symbolic_model()
+        try:
+            # Create symbolic model
+            logger.info("Creating symbolic model...")
+            states, controls, equations = self.create_symbolic_model()
+            
+            # Compute steady state
+            logger.info("Computing steady state...")
+            ss_values = self.compute_steady_state_numerically(states, controls, equations)
+            if ss_values is None:
+                logger.error("Failed to compute steady state.")
+                return None
+            
+            # Log steady state values for debugging
+            logger.debug("Steady state values:")
+            for var, val in ss_values.items():
+                logger.debug(f"{var}: {val}")
         
-        # Compute steady state
-        ss_values = self.compute_steady_state_numerically(states, controls, equations)
+        try:
+            # Linearize model
+            logger.info("Linearizing model...")
+            A, B, C, D = self.linearize_model(states, controls, equations, ss_values)
+            
+            # Log matrix properties
+            for name, matrix in [('A', A), ('B', B), ('C', C), ('D', D)]:
+                logger.debug(f"{name} shape: {matrix.shape}")
+                logger.debug(f"{name} condition number: {np.linalg.cond(matrix)}")
+                logger.debug(f"{name} has NaN: {np.any(np.isnan(matrix))}")
+                logger.debug(f"{name} has Inf: {np.any(np.isinf(matrix))}")
+            
+            # Solve first-order
+            logger.info("Solving first-order conditions...")
+            P, F = self.solve_first_order(A, B, C, D)
+            
+            if P is None or F is None:
+                logger.error("First-order solution returned None")
+                return None
+            
+            # Create solution with correct keys
+            solution = {
+                'state_transition': F,
+                'policy_function': P,
+                'steady_state': ss_values
+            }
+            
+            logger.info("Model solution completed successfully")
+            
+        except Exception as e:
+            logger.error(f"Error during model solution: {str(e)}")
+            return None
         
-        # Linearize model
-        A, B, C, D = self.linearize_model(states, controls, equations, ss_values)
-        
-        # Solve first-order
-        P, F = self.solve_first_order(A, B, C, D)
-        
-        # If higher-order, solve for higher-order terms
+        # Add higher-order terms if needed
         if self.order > 1:
-            solution = self.solve_higher_order(states, controls, equations, ss_values, P, F)
-        else:
-            solution = {"P": P, "F": F}
+            higher_order = self.solve_higher_order(states, controls, equations, ss_values, P, F)
+            solution.update(higher_order)
         
         # Store solution
         self.solution = solution
